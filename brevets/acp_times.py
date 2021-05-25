@@ -4,167 +4,83 @@ for ACP-sanctioned brevets
 following rules described at https://rusa.org/octime_alg.html
 and https://rusa.org/pages/rulesForRiders
 """
+import sys
 import arrow
 
 
-#  You MUST provide the following two functions
-#  with these signatures. You must keep
-#  these signatures even if you don't use all the
-#  same arguments.
-#
+# Minimum times as [(from_dist, to_dist, speed),
+#                   (from_dist, to_dist, speed), ... ]
+min_speed = [(0, 200, 15), (200, 400, 15), (400, 600, 15),
+             (600, 1000, 11.428), (1000, 1300, 13.333)]
+max_speed = [(0, 200, 34), (200, 400, 32), (400, 600, 30),
+             (600, 1000, 28), (1000, 1300, 26)]
+
+# Final control times (at or exceeding brevet distance) are special cases
+final_close = {200: 13.5, 300: 20, 400: 27, 600: 40, 1000: 75}
+max_dist = 1300
 
 
 def open_time(control_dist_km, brevet_dist_km, brevet_start_time):
     """
     Args:
-       control_dist_km:  number, control distance in kilometers
-       brevet_dist_km: number, nominal distance of the brevet
-           in kilometers, which must be one of 200, 300, 400, 600,
-           or 1000 (the only official ACP brevet distances)
-       brevet_start_time:  A date object (arrow)
+       control_dist_km:  number, the control distance in kilometers
+       brevet_dist_km: number, the nominal distance of the brevet
+       in kilometers, which must be one of 200, 300, 400, 600, or
+           1000 (the only official ACP brevet distances)
+       brevet_start_time:  An ISO 8601 format date-time string
+           indicating the official start time of the brevet
     Returns:
-       A date object indicating the control open time.
+       An ISO 8601 format date string indicating the control open time.
        This will be in the same time zone as the brevet start time.
     """
-
-    # check if we have a valid brevet distance
-    acceptable_brevet_dists = {200, 300, 400, 600, 1000}
-    if brevet_dist_km not in acceptable_brevet_dists:
-        raise ValueError("Not a valid brevet distance!")
-
-    # a dictionary with key = runs_through, value = max speed & max km
-    max_speeds = {
-        0: (34, 200),
-        1: (32, 300),
-        2: (30, 400),
-        3: (28, 600),
-        4: (26, 1000)
-    }
-
-    time_elapsed = 0
-
-    if control_dist_km > brevet_dist_km:
+    if control_dist_km >= brevet_dist_km:
         control_dist_km = brevet_dist_km
-
-    # calculate the divisions from the segments
-    temp = control_dist_km
-    calc = temp
-    last_num = temp
-    parts = [200, 200, 200, 400, 300]
-    parts_calc = 0
-    # go through, checking how many times control_dist_km splits into parts
-    for x in parts:
-        calc -= x
-        if calc < 0:
-            break
-        parts_calc += 1
-    # if we can't split control_dist_km below
-    if parts_calc == 0:
-        time_elapsed += (temp / max_speeds[0][0])
-    else:
-        number_list = []
-        for i in range(parts_calc):
-            number_list.append(parts[i])
-            last_num -= parts[i]
-        if last_num <= 0:
-            number_list[-1] += last_num
+    start_time = arrow.get(brevet_start_time)
+    elapsed_hours = 0
+    distance_left = control_dist_km
+    for from_dist, to_dist, speed in max_speed:
+        seg_length = to_dist - from_dist
+        if distance_left > seg_length:
+            elapsed_hours += seg_length / speed
+            distance_left -= seg_length
         else:
-            number_list.append(last_num)
-
-        for i, x in enumerate(number_list):
-            time_elapsed += (x / max_speeds[i][0])
-            temp -= max_speeds[i][1]
-
-    h, m = divmod(time_elapsed, 1)
-    m = round(m * 60)
-
-    return brevet_start_time.shift(hours = h, minutes = m)
+            elapsed_hours += distance_left / speed
+            open_time = start_time.shift(minutes=round(elapsed_hours*60))
+            return open_time
 
 
 def close_time(control_dist_km, brevet_dist_km, brevet_start_time):
     """
     Args:
-       control_dist_km:  number, control distance in kilometers
-          brevet_dist_km: number, nominal distance of the brevet
-          in kilometers, which must be one of 200, 300, 400, 600, or 1000
-          (the only official ACP brevet distances)
-       brevet_start_time:  A date object (arrow)
+       control_dist_km:  number, the control distance in kilometers
+       brevet_dist_km: number, the nominal distance of the brevet
+           in kilometers, which must be one of 200, 300, 400, 600,
+           or 1000 (the only official ACP brevet distances)
+       brevet_start_time:  An ISO 8601 format date-time string indicating
+           the official start time of the brevet
     Returns:
-       A date object indicating the control close time.
+       An ISO 8601 format date string indicating the control close time.
        This will be in the same time zone as the brevet start time.
     """
-
-    # check if we have a valid brevet distance
-    acceptable_brevet_dists = {200, 300, 400, 600, 1000}
-    if brevet_dist_km not in acceptable_brevet_dists:
-        raise ValueError("Not a valid brevet distance!")
-
-    # a dictionary with key = runs_through, value = max speed & max km
-    min_speeds = {
-        0: (15, 200),
-        1: (15, 400),
-        2: (15, 600),
-        3: (11.428, 800),
-        4: (13.333, 1000),
-    }
-
-    time_elapsed = 0
-
-    control_dist_km = round(control_dist_km)
+    if control_dist_km == 0:
+        return brevet_start_time.shift(hours=1)
+    start_time = arrow.get(brevet_start_time)
     if control_dist_km >= brevet_dist_km:
-        control_dist_km = brevet_dist_km
-    # cover France's algorithm
-    if control_dist_km <= 60:
-        special = 2 / 6
-        elapsed = (control_dist_km / special) + 60
-        h = int(elapsed / 60)
-        m = int(round(elapsed % 60))
-        return brevet_start_time.shift(hours = h, minutes = m)
-
-    # calculate the divisions from the segments
-    temp = control_dist_km
-    calc = temp
-    last_num = temp
-    parts = [200, 200, 200, 400, 300]
-    parts_calc = 0
-    # go through, checking how many times control_dist_km splits into parts
-    for x in parts:
-        calc -= x
-        if calc < 0:
-            break
-        parts_calc += 1
-    # if we can't split control_dist_km below
-    if parts_calc == 0:
-        time_elapsed += (temp / min_speeds[0][0])
-    else:
-        number_list = []
-        for i in range(parts_calc):
-            print(i)
-            number_list.append(parts[i])
-            last_num -= parts[i]
-        if last_num <= 0:
-            number_list[-1] += last_num
+        duration = final_close[brevet_dist_km]
+        finish_time = start_time.shift(hours=duration)
+        return finish_time
+    elapsed_hours = 0
+    distance_left = control_dist_km
+    for from_dist, to_dist, speed in min_speed:
+        seg_length = to_dist - from_dist
+        if distance_left > seg_length:
+            elapsed_hours += seg_length / speed
+            distance_left -= seg_length
         else:
-            number_list.append(last_num)
-        print(number_list)
+            elapsed_hours += distance_left / speed
+            if control_dist_km < 60:
+                elapsed_hours += (60 - control_dist_km) / 60
+            cut_time = start_time.shift(minutes=round(elapsed_hours*60))
+            return cut_time
 
-        for i, x in enumerate(number_list):
-            print(str(x) + " / " + str(min_speeds[i][0]))
-            time_elapsed += (x / min_speeds[i][0])
-            temp -= min_speeds[i][1]
-
-    h, m = divmod(time_elapsed, 1)
-    m = round(m * 60)
-
-    if control_dist_km == 200 and brevet_dist_km == 200:
-        print("in 200 conditional")
-        m += 10
-    if control_dist_km == 400 and brevet_dist_km == 400:
-        print("in 400 conditional")
-        m += 20
-
-    print("h = " + str(h) + ", m = " + str(m))
-
-    print(brevet_start_time.shift(hours = h, minutes = m))
-
-    return brevet_start_time.shift(hours = h, minutes = m)
+    return arrow.now()
