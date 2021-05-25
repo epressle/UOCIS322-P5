@@ -21,6 +21,36 @@ CONFIG = config.configuration()
 client = MongoClient('mongodb://' + os.environ['MONGODB_HOSTNAME'], 27017)
 db = client.brevetdb
 
+# a very extraneous helper function to make testing simple
+def insert_to_db(proc):
+    return db.brevetdb.insert_one(proc)
+
+# helper function
+def insert_items(items, num_items):
+    to_insert = {}
+    to_insert['brev_distance'] = items['data[dist]']
+    to_insert['open_times'] = []
+    to_insert['close_times'] = []
+    to_insert['kms'] = []
+    currentKm = float('-inf')
+    km_test = float('-inf')
+    for i in range(num_items):
+        if items['data[data][' + str(i) + '][km]'] != '':
+            to_insert['open_times'].append(items['data[data][' + str(i) + '][open_time]'])
+            to_insert['close_times'].append(items['data[data][' + str(i) + '][close_time]'])
+            if items['data[data][' + str(i) + '][km]'] != '':
+                km_test = float(items['data[data][' + str(i) + '][km]'])
+            else:
+                km_test = 0
+            if km_test < 0:
+                raise ValueError("Negative distances are not accepted!")
+            if km_test <= currentKm:
+                raise ValueError("Control checkpoints are not ordered!")
+            currentKm = km_test
+            to_insert['kms'].append(items['data[data][' + str(i) + '][km]'])
+
+    app.logger.debug(to_insert)
+    insert_to_db(to_insert)
 
 ###
 # Pages
@@ -32,6 +62,13 @@ db = client.brevetdb
 def index():
     app.logger.debug("Main page entry")
     return flask.render_template('calc.html')
+
+@app.route("/display_db")
+def display():
+    app.logger.debug("Display page")
+    saved = list(db.brevetdb.find())
+    app.logger.debug(saved)
+    return flask.render_template('display_db.html', saved = saved)
 
 
 @app.errorhandler(404)
@@ -74,9 +111,13 @@ def _calc_times():
     result = {"open": open_time, "close": close_time}
     return flask.jsonify(result=result)
 
-@app.route("/submit", methods=["POST"])
+@app.route("/submit/", methods=["POST"])
 def _submit():
-    
+    app.logger.debug("In submit function")
+    items = request.form.to_dict()
+    app.logger.debug("Length of items to loop = " + str(len(items) // 3))
+    insert_items(items, len(items) // 3)
+    return flask.jsonify(result=str(items))
 
 #############
 

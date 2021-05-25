@@ -3,11 +3,12 @@ version: '3'
 services:
     web:
         build: .
+        command: python -u app.py
         ports:
             - "6262:5000"
         depends_on:
-            - brevetdb
+            - ourdb
         environment:
-            MONGODB_HOSTNAME: brevetdb
-    brevetdb:
+            MONGODB_HOSTNAME: ourdb
+    ourdb:
         image: mongo:latest

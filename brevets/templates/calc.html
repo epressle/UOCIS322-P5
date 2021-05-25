@@ -50,8 +50,6 @@
          {% endwith %}
          <!-- Design on bootstrap grid -->
          <form role="form">
-	    <button id="display">Display</button>
-	    <button id="submit">Submit</button>
             <div class="row">
                <div class="col-md-4">
                   <label>Distance</label>
@@ -112,6 +110,8 @@
                <!-- col -->
             </div>
             <!-- row -->
+            <button id="display">Display</button>
+            <button id="submit">Submit</button>
          </form>
          <script type="text/javascript">
             var SCRIPT_ROOT = {{ request.script_root|tojson|safe }} ;
@@ -170,20 +170,36 @@
                     });
 
                });
-		
+
 	   $('#submit').click(
 		   function(e) {
 		       e.preventDefault();
-		       toAdd = [];
-      		       $('.control').each(
-			    function(ind, curr) {
-				var index = ind;
-			    	var oTime = $(this).find("input[name='open']").val();
-				var cTime = $(this).find("input[name='close']").val();
-				var km = $(this).find("input[name='km']").val();
+		       newEntries = {dist: $('#brevet_dist_km').val(), data: []};
+      		   $('.control').each(
+			        function(ind, curr) {
+			        var oTime = $(this).find("input[name='open']").val();
+				    var cTime = $(this).find("input[name='close']").val();
+				    var km = $(this).find("input[name='km']").val();
+                    if (oTime != "") {
+                        console.log("Inserting new data!");
+                        newEntries.data.push({open_time: oTime, close_time: cTime, km: km});
+                        console.log(newEntries);
+                    }
+			   });
+               $.post("/submit/", {data: newEntries},
+                    function() {}, "json"
+                );
+           });
 
-			    }
-			
+      $('#display').click(
+          function(e) {
+              console.log("Display clicked!")
+              e.preventDefault();
+              window.location.href = '/display_db'
+          }
+      );
+
+
 
          </script>
       </div>
