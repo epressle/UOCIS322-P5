@@ -18,6 +18,7 @@ import os
 ###
 app = flask.Flask(__name__)
 CONFIG = config.configuration()
+# set up database
 client = MongoClient('mongodb://' + os.environ['MONGODB_HOSTNAME'], 27017)
 db = client.brevetdb
 
@@ -27,21 +28,22 @@ def insert_to_db(proc):
 
 # helper function
 def insert_items(items, num_items):
+    # initialize a dictionary, set brev_distance once
     to_insert = {}
     to_insert['brev_distance'] = items['data[dist]']
     to_insert['open_times'] = []
     to_insert['close_times'] = []
     to_insert['kms'] = []
+    # setting these to -inf as a placeholder
     currentKm = float('-inf')
     km_test = float('-inf')
+    # go through all items, adding them to the arrays in the dictionaries
     for i in range(num_items):
+        # if km is blank, don't add the entry
         if items['data[data][' + str(i) + '][km]'] != '':
             to_insert['open_times'].append(items['data[data][' + str(i) + '][open_time]'])
             to_insert['close_times'].append(items['data[data][' + str(i) + '][close_time]'])
-            if items['data[data][' + str(i) + '][km]'] != '':
-                km_test = float(items['data[data][' + str(i) + '][km]'])
-            else:
-                km_test = 0
+            km_test = float(items['data[data][' + str(i) + '][km]'])
             if km_test < 0:
                 raise ValueError("Negative distances are not accepted!")
             if km_test <= currentKm:
@@ -66,6 +68,7 @@ def index():
 @app.route("/display_db")
 def display():
     app.logger.debug("Display page")
+    # get the database, process it into a list
     saved = list(db.brevetdb.find())
     app.logger.debug(saved)
     return flask.render_template('display_db.html', saved = saved)
@@ -114,9 +117,15 @@ def _calc_times():
 @app.route("/submit/", methods=["POST"])
 def _submit():
     app.logger.debug("In submit function")
+    # get the controls from the form
     items = request.form.to_dict()
     app.logger.debug("Length of items to loop = " + str(len(items) // 3))
-    insert_items(items, len(items) // 3)
+    # there are 3 variables (open time, close time, km) per control
+    # insert items into the database
+    num_controls = len(items) // 3
+    if num_controls <= 0:
+        raise ValueError("No controls were given!")
+    insert_items(items, num_controls)
     return flask.jsonify(result=str(items))
 
 #############

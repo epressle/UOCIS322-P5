@@ -174,7 +174,10 @@
 	   $('#submit').click(
 		   function(e) {
 		       e.preventDefault();
+               // add the brevet distance only once for all controls
 		       newEntries = {dist: $('#brevet_dist_km').val(), data: []};
+               // for all controls, grab opening time, closing time, and km
+               // put it in the data array as a dictionary
       		   $('.control').each(
 			        function(ind, curr) {
 			        var oTime = $(this).find("input[name='open']").val();
@@ -195,6 +198,7 @@
           function(e) {
               console.log("Display clicked!")
               e.preventDefault();
+              // redirect to display_db, flask takes care of this
               window.location.href = '/display_db'
           }
       );
